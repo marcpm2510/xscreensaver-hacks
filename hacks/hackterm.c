@@ -946,24 +946,73 @@ static void set_panel_geom (ht_state *s, hpanel *p, int x, int y, int w, int h)
     }
 }
 
-/* Place one panel at a random size somewhere on the screen, keeping it big
-   enough to stay readable.  Used by the "random" layout. */
+/* How much of a candidate rectangle would be covered by the panels that are
+   already placed.  0 = free, 1 = completely buried. */
+static double overlap_ratio (ht_state *s, hpanel *skip,
+                             int x, int y, int w, int h)
+{
+  double area = (double) w * h;
+  double ov = 0.0;
+  int i;
+
+  if (area <= 0) return 1.0;
+
+  for (i = 0; i < s->npanels; i++)
+    {
+      hpanel *q = &s->p[i];
+      int ix1, iy1, ix2, iy2;
+
+      if (q == skip || q->w <= 0 || q->h <= 0) continue;
+
+      ix1 = x > q->x ? x : q->x;
+      iy1 = y > q->y ? y : q->y;
+      ix2 = (x + w) < (q->x + q->w) ? (x + w) : (q->x + q->w);
+      iy2 = (y + h) < (q->y + q->h) ? (y + h) : (q->y + q->h);
+
+      if (ix2 > ix1 && iy2 > iy1)
+        ov += (double) (ix2 - ix1) * (iy2 - iy1);
+    }
+  return ov / area;
+}
+
+/* Place one panel at a random size somewhere on the screen.  Candidates that
+   would bury the window under its neighbours are rejected: every console must
+   stay at least partly on screen, title bar included. */
 static void scatter_panel (ht_state *s, hpanel *p)
 {
   int W = s->xgwa.width, H = s->xgwa.height;
-  int w = W * frnd (0.30, 0.58);
-  int h = H * frnd (0.30, 0.58);
-  int x, y;
+  double maxfrac = (s->npanels >= 5) ? 0.44 : 0.55;
+  int best_x = 0, best_y = 0, best_w = 0, best_h = 0;
+  double best = 2.0;
+  int tries;
 
-  if (w > W - 8) w = W - 8;
-  if (h > H - 8) h = H - 8;
-  if (w < s->char_w * 24 + 12) w = s->char_w * 24 + 12;
-  if (h < s->char_h * 8 + 20)  h = s->char_h * 8 + 20;
+  for (tries = 0; tries < 60; tries++)
+    {
+      int w = W * frnd (0.30, maxfrac);
+      int h = H * frnd (0.30, maxfrac);
+      int x, y;
+      double r;
 
-  x = (W - w) * frnd (0.0, 1.0);
-  y = (H - h) * frnd (0.0, 1.0);
+      if (w > W - 8) w = W - 8;
+      if (h > H - 8) h = H - 8;
+      if (w < s->char_w * 24 + 12) w = s->char_w * 24 + 12;
+      if (h < s->char_h * 8 + 20)  h = s->char_h * 8 + 20;
+      if (w > W - 8) w = W - 8;
+      if (h > H - 8) h = H - 8;
 
-  set_panel_geom (s, p, x, y, w, h);
+      x = (W - w) * frnd (0.0, 1.0);
+      y = (H - h) * frnd (0.0, 1.0);
+
+      r = overlap_ratio (s, p, x, y, w, h);
+      if (r < best)
+        {
+          best = r; best_x = x; best_y = y; best_w = w; best_h = h;
+        }
+      if (r <= 0.12)
+        break;                      /* comfortable, stop looking */
+    }
+
+  set_panel_geom (s, p, best_x, best_y, best_w, best_h);
 }
 
 static void layout_panels (ht_state *s)
@@ -1228,10 +1277,37 @@ static unsigned long hackterm_draw (Display *dpy, Window window, void *closure)
     }
 
   for (i = 0; i < s->npanels; i++)
-    {
-      update_panel (s, &s->p[i], t);
-      draw_panel (s, &s->p[i], t);
-    }
+    update_panel (s, &s->p[i], t);
+
+  /* Paint the biggest windows first and the smallest last, so a small
+     console is never buried under a large one -- every window keeps its
+     title bar and at least a few lines visible. */
+  {
+    int order[MAXPANELS];
+    int k, j;
+
+    for (i = 0; i < s->npanels; i++) order[i] = i;
+
+    for (i = 1; i < s->npanels; i++)          /* insertion sort, n <= 6 */
+      {
+        int v = order[i];
+        int va = s->p[v].w * s->p[v].h;
+        for (j = i - 1; j >= 0; j--)
+          {
+            int ua = s->p[order[j]].w * s->p[order[j]].h;
+            if (ua >= va) break;
+            order[j + 1] = order[j];
+          }
+        order[j + 1] = v;
+      }
+
+    for (k = 0; k < s->npanels; k++)
+      {
+        int idx = order[k];
+        if (idx < 0 || idx >= s->npanels) continue;
+        draw_panel (s, &s->p[idx], t);
+      }
+  }
 
   return 30000;   /* ~33 fps */
 }
