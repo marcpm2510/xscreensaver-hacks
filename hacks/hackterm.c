@@ -30,14 +30,6 @@ enum { C_BG, C_FG, C_CMD, C_OK, C_WARN, C_ERR, C_DIM, C_CYAN, C_MAG,
 /* panel states */
 enum { ST_TYPING, ST_OUTPUT, ST_HOLD };
 
-/* how the "window" around each terminal is drawn */
-enum { FRAME_FLAT, FRAME_BEVEL, FRAME_SHADOW, FRAME_TABS, FRAME_MINIMAL,
-       FRAME_MAX };
-
-static const char *frame_names[] = {
-  "flat", "bevel", "shadow", "tabs", "minimal", 0
-};
-
 typedef struct {
   int x, y, w, h;             /* outer rect, includes the border */
   int tx, ty, tw, th;         /* text area */
@@ -71,12 +63,9 @@ typedef struct {
   XftDraw *xftdraw;
   XftColor pal[C_NPAL];
   GC gc;
-  Pixmap stipple;             /* 50% dither, for shading without a
-                                 second colour (themes may be monochrome) */
   int char_w, char_h;
   int npanels;
   int show_titles;
-  int frame;                  /* FRAME_* */
   double speed;               /* multiplier: >1 = faster */
   hpanel p[MAXPANELS];
 } ht_state;
@@ -859,18 +848,6 @@ static void *hackterm_init (Display *dpy, Window window)
   if (s->npanels < 1) s->npanels = 1;
   if (s->npanels > MAXPANELS) s->npanels = MAXPANELS;
   s->show_titles = get_boolean_resource (dpy, "titles", "Titles");
-  {
-    char *f = get_string_resource (dpy, "frame", "Frame");
-    int k, found = 0;
-    s->frame = FRAME_FLAT;
-    for (k = 0; frame_names[k]; k++)
-      if (f && !strcasecmp (f, frame_names[k]))
-        { s->frame = k; found = 1; break; }
-    if (f && !found)
-      fprintf (stderr, "%s: unknown frame \"%s\"; using flat.\n",
-               progname, f);
-    if (f) free (f);
-  }
   s->speed = get_float_resource (dpy, "speed", "Speed");
   if (s->speed <= 0) s->speed = 1.0;
 
@@ -905,7 +882,6 @@ static void *hackterm_init (Display *dpy, Window window)
   }
 
   s->gc = XCreateGC (dpy, window, 0, 0);
-  s->stipple = XCreateBitmapFromData (dpy, window, "\001\002", 2, 2);
 
   /* panel roles */
   for (i = 0; i < MAXPANELS; i++)
@@ -950,8 +926,7 @@ static void layout_panels (ht_state *s)
       p->w = cw;
       p->h = ch;
 
-      title_h = (s->show_titles && s->frame != FRAME_MINIMAL)
-                 ? s->char_h + 6 : 4;
+      title_h = s->show_titles ? s->char_h + 6 : 4;
       p->tx = p->x + 8;
       p->ty = p->y + title_h + 4;
       p->tw = p->w - 16;
@@ -1068,100 +1043,31 @@ static void fill_rect (ht_state *s, int x, int y, int w, int h, int color)
   XFillRectangle (s->dpy, s->window, s->gc, x, y, w, h);
 }
 
-/* Same colour, half the pixels: reads as a darker shade of the accent even
-   when the theme is strictly monochrome. */
-static void fill_rect_shade (ht_state *s, int x, int y, int w, int h,
-                             int color)
-{
-  XSetForeground (s->dpy, s->gc, s->pal[color].pixel);
-  XSetFillStyle (s->dpy, s->gc, FillStippled);
-  XSetStipple (s->dpy, s->gc, s->stipple);
-  XFillRectangle (s->dpy, s->window, s->gc, x, y, w, h);
-  XSetFillStyle (s->dpy, s->gc, FillSolid);
-}
-
 static void draw_panel (ht_state *s, hpanel *p, double t)
 {
   int i, baseline;
 
   /* hard-clip every primitive (rects as well as text) to the panel, so a
-     bad width estimate can never paint outside its own box.  The box is a
-     little larger than the panel to leave room for a drop shadow. */
+     bad width estimate can never paint outside its own box */
   {
     XRectangle cr;
-    cr.x = p->x;
-    cr.y = p->y;
-    cr.width  = p->w + (s->frame == FRAME_SHADOW ? 6 : 0);
-    cr.height = p->h + (s->frame == FRAME_SHADOW ? 6 : 0);
+    cr.x = p->x; cr.y = p->y; cr.width = p->w; cr.height = p->h;
     XSetClipRectangles (s->dpy, s->gc, 0, 0, &cr, 1, Unsorted);
   }
 
-  /* drop shadow, painted before the body */
-  if (s->frame == FRAME_SHADOW)
-    fill_rect_shade (s, p->x + 5, p->y + 5, p->w, p->h, p->accent);
-
-  /* body */
+  /* body + border */
   fill_rect (s, p->x, p->y, p->w, p->h, C_BG);
-
-  /* frame */
-  switch (s->frame)
-    {
-    case FRAME_BEVEL:            /* raised 3-D border, Motif style */
-      fill_rect (s, p->x, p->y, p->w, 2, p->accent);
-      fill_rect (s, p->x, p->y, 2, p->h, p->accent);
-      fill_rect_shade (s, p->x, p->y + p->h - 2, p->w, 2, p->accent);
-      fill_rect_shade (s, p->x + p->w - 2, p->y, 2, p->h, p->accent);
-      fill_rect_shade (s, p->x + 2, p->y + 2, p->w - 4, 1, p->accent);
-      fill_rect_shade (s, p->x + 2, p->y + 2, 1, p->h - 4, p->accent);
-      break;
-
-    case FRAME_SHADOW:           /* thin lit top edge + shadow */
-      fill_rect (s, p->x, p->y, p->w, 1, p->accent);
-      fill_rect_shade (s, p->x + p->w - 1, p->y, 1, p->h, p->accent);
-      fill_rect_shade (s, p->x, p->y + p->h - 1, p->w, 1, p->accent);
-      break;
-
-    case FRAME_TABS:             /* title bar with a raised tab */
-      fill_rect (s, p->x, p->y, p->w, 1, C_DIM);
-      fill_rect (s, p->x, p->y + p->h - 1, p->w, 1, C_DIM);
-      fill_rect (s, p->x, p->y, 1, p->h, C_DIM);
-      fill_rect (s, p->x + p->w - 1, p->y, 1, p->h, C_DIM);
-      break;
-
-    case FRAME_MINIMAL:          /* no chrome at all */
-      break;
-
-    case FRAME_FLAT:
-    default:
-      fill_rect (s, p->x, p->y, p->w, 1, p->accent);
-      fill_rect (s, p->x, p->y + p->h - 1, p->w, 1, p->accent);
-      fill_rect (s, p->x, p->y, 1, p->h, p->accent);
-      fill_rect (s, p->x + p->w - 1, p->y, 1, p->h, p->accent);
-      break;
-    }
+  fill_rect (s, p->x, p->y, p->w, 1, p->accent);
+  fill_rect (s, p->x, p->y + p->h - 1, p->w, 1, p->accent);
+  fill_rect (s, p->x, p->y, 1, p->h, p->accent);
+  fill_rect (s, p->x + p->w - 1, p->y, 1, p->h, p->accent);
 
   /* title bar */
-  if (s->show_titles && s->frame != FRAME_MINIMAL)
+  if (s->show_titles)
     {
-      int tbar_h = s->char_h + 4;
-
-      if (s->frame == FRAME_TABS)
-        {
-          /* a tab only as wide as the title, sitting on a dark strip */
-          int tw = strlen (p->title) * s->char_w + 16;
-          fill_rect (s, p->x + 1, p->y + 1, p->w - 2, tbar_h, C_TITLE_BG);
-          if (tw > p->w - 8) tw = p->w - 8;
-          fill_rect (s, p->x + 4, p->y + 1, tw, tbar_h, p->accent);
-        }
-      else
-        fill_rect (s, p->x + 1, p->y + 1, p->w - 2, tbar_h, C_TITLE_BG);
-
+      fill_rect (s, p->x + 1, p->y + 1, p->w - 2, s->char_h + 4, C_TITLE_BG);
       baseline = p->y + 1 + s->char_h + 1;
-      draw_text (s, p->tx,
-                 baseline,
-                 p->title,
-                 (s->frame == FRAME_TABS ? C_BG : C_TITLE_FG),
-                 p->cols);
+      draw_text (s, p->tx, baseline, p->title, C_TITLE_FG, p->cols);
       /* little status pips, right aligned */
       fill_rect (s, p->x + p->w - 22, p->y + 5, 4, 4, p->accent);
       fill_rect (s, p->x + p->w - 16, p->y + 5, 4, 4, p->accent);
@@ -1266,7 +1172,6 @@ static void hackterm_free (Display *dpy, Window window, void *closure)
 
   for (i = 0; i < MAXPANELS; i++) free_panel (&s->p[i]);
   if (s->xftdraw) XftDrawDestroy (s->xftdraw);
-  if (s->stipple) XFreePixmap (dpy, s->stipple);
   if (s->gc) XFreeGC (dpy, s->gc);
   if (s->font) XftFontClose (dpy, s->font);
   free (s);
@@ -1281,7 +1186,6 @@ static const char *hackterm_defaults [] = {
   "*delay:           30000",
   "*panels:          4",
   "*titles:          True",
-  "*frame:           flat",
   "*speed:           1.0",
   "*theme:           phosphor",
   "*font:            Monospace",
@@ -1295,7 +1199,6 @@ static XrmOptionDescRec hackterm_options [] = {
   { "-font",       ".font",      XrmoptionSepArg, 0 },
   { "-font-size",  ".fontSize",  XrmoptionSepArg, 0 },
   { "-speed",      ".speed",     XrmoptionSepArg, 0 },
-  { "-frame",      ".frame",     XrmoptionSepArg, 0 },
   { "-titles",     ".titles",    XrmoptionNoArg, "True"  },
   { "-no-titles",  ".titles",    XrmoptionNoArg, "False" },
   { 0, 0, 0, 0 }
