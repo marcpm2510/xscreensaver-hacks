@@ -1087,14 +1087,18 @@ static void draw_panel (ht_state *s, hpanel *p, double t)
       bx = p->x + p->w - 46;
       fill_rect (s, bx, btn_y + 4, 9, 1, C_TITLE_FG);             /* - */
       fill_rect (s, bx + 16, btn_y + 1, 9, 1, C_TITLE_FG);        /* square */
-      fill_rect (s, bx + 16, btn_y + 8, 9, 1, C_TITLE_FG);
-      fill_rect (s, bx + 16, btn_y + 1, 1, 8, C_TITLE_FG);
-      fill_rect (s, bx + 24, btn_y + 1, 1, 8, C_TITLE_FG);
+      fill_rect (s, bx + 16, btn_y + 9, 9, 1, C_TITLE_FG);
+      fill_rect (s, bx + 16, btn_y + 1, 1, 9, C_TITLE_FG);
+      fill_rect (s, bx + 24, btn_y + 1, 1, 9, C_TITLE_FG);
+      /* 2px strokes for the cross: a 1px diagonal on a dark bar reads as a
+         fuzzy smear rather than an X */
       XSetForeground (s->dpy, s->gc, s->pal[C_TITLE_FG].pixel);
+      XSetLineAttributes (s->dpy, s->gc, 2, LineSolid, CapRound, JoinRound);
       XDrawLine (s->dpy, s->window, s->gc,
-                 bx + 33, btn_y + 1, bx + 41, btn_y + 9);         /* x */
+                 bx + 33, btn_y + 2, bx + 41, btn_y + 9);
       XDrawLine (s->dpy, s->window, s->gc,
-                 bx + 41, btn_y + 1, bx + 33, btn_y + 9);
+                 bx + 41, btn_y + 2, bx + 33, btn_y + 9);
+      XSetLineAttributes (s->dpy, s->gc, 0, LineSolid, CapButt, JoinMiter);
     }
   else
     fill_rect (s, p->x, p->y, p->w, 1, C_DIM);
