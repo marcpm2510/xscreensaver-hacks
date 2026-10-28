@@ -133,6 +133,20 @@ dynamiques vers libX11, libXt, libXft, libfontconfig, libpng16. Sur une
 distribution plus ancienne, recompiler depuis les sources (section
 suivante).
 
+## Publier une version
+
+Les binaires sont distribués par releases taguées (`v1.0.0`, `v1.1.0`, …).
+Tout est automatisé :
+
+    ./scripts/release.sh 1.1.0 --dry-run   # vérifie ce qui serait publié
+    ./scripts/release.sh 1.1.0             # tag + push + release GitHub
+
+Le script prend le binaire compilé dans `~/xscreensaver/hacks/hackterm`
+(surchargeable par `HACKTERM_SRC`), le strippe, l'empaquette avec le XML et
+`bg-convert.sh` dans `dist/hackterm-<version>-linux-x86_64.tar.gz`, crée le
+tag git, le pousse, puis publie la release avec les notes générées depuis
+les commits. Il refuse de rejouer un tag existant.
+
 ## Compiler
 
 Depuis un arbre XScreenSaver configuré (`./configure` déjà passé) :
