@@ -15,7 +15,7 @@
 
    <string id="font" _label="Font family" arg="--font %"/>
 
-   <string id="bgimage" _label="Fond d'Ã©cran (chemin, vide = dÃ©cor)"
+   <string id="bgimage" _label="Fond d'écran (chemin, vide = décor)"
            arg="--bg-image %"/>
 
    <number id="speed" type="slider" arg="--speed %"
@@ -23,12 +23,12 @@
            low="0.2" high="4.0" default="1.0"/>
 
    <select id="layout">
-    <option id="grid"   _label="Grille (par dÃ©faut)"  arg-set="--layout grid"/>
-    <option id="random" _label="FenÃªtres alÃ©atoires"  arg-set="--layout random"/>
+    <option id="grid"   _label="Grille (par défaut)"  arg-set="--layout grid"/>
+    <option id="random" _label="Fenêtres aléatoires"  arg-set="--layout random"/>
    </select>
 
    <number id="moveinterval" type="spinbutton" arg="--move-interval %"
-           _label="DÃ©placement des fenÃªtres (s, 0 = jamais)"
+           _label="Déplacement des fenêtres (s, 0 = jamais)"
            low="0" high="300" default="15"/>
 
    <boolean id="overlap" _label="Autoriser le chevauchement"
