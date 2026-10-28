@@ -15,6 +15,9 @@
 
    <string id="font" _label="Font family" arg="--font %"/>
 
+   <string id="bgimage" _label="Fond d'écran (chemin, vide = décor)"
+           arg="--bg-image %"/>
+
    <number id="speed" type="slider" arg="--speed %"
            _label="Typing speed" _low-label="Slow" _high-label="Fast"
            low="0.2" high="4.0" default="1.0"/>

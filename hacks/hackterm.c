@@ -8,6 +8,7 @@
  */
 
 #include "screenhack.h"
+#include "ximage-loader.h"
 #include <string.h>
 #include <time.h>
 
@@ -64,6 +65,8 @@ typedef struct {
   XftDraw *xftdraw;
   XftColor pal[C_NPAL];
   Pixmap bg;                  /* pre-rendered "hacking" backdrop (random layout) */
+  XImage *bg_image;           /* optional user wallpaper (-bg-image) */
+  int bg_image_w, bg_image_h;
   GC gc;
   int char_w, char_h;
   int npanels;
@@ -895,6 +898,29 @@ static void *hackterm_init (Display *dpy, Window window)
 
   s->gc = XCreateGC (dpy, window, 0, 0);
 
+  /* optional wallpaper: -bg-image /path/to/picture.png */
+  {
+    char *img = get_string_resource (dpy, "bgImage", "BgImage");
+    if (img && *img && strcmp (img, "(none)"))
+      {
+        int iw = 0, ih = 0;
+        Pixmap m = 0;
+        Pixmap pm = file_to_pixmap (dpy, window, img, &iw, &ih, &m);
+        if (pm)
+          {
+            s->bg_image = XGetImage (dpy, pm, 0, 0, iw, ih, ~0L, ZPixmap);
+            s->bg_image_w = iw;
+            s->bg_image_h = ih;
+            XFreePixmap (dpy, pm);
+          }
+        else
+          fprintf (stderr, "%s: cannot load background image \"%s\"\n",
+                   progname, img);
+        if (m) XFreePixmap (dpy, m);
+      }
+    if (img) free (img);
+  }
+
   /* panel roles */
   for (i = 0; i < MAXPANELS; i++)
     {
@@ -1041,6 +1067,65 @@ static void build_background (ht_state *s)
   /* base */
   XSetForeground (dpy, gc, s->pal[C_BG].pixel);
   XFillRectangle (dpy, s->bg, gc, 0, 0, W, H);
+
+  /* a user wallpaper replaces the vector backdrop entirely */
+  if (s->bg_image && s->bg_image_w > 0 && s->bg_image_h > 0)
+    {
+      XImage *src = s->bg_image;
+      XImage *dst;
+      int bytes = src->bits_per_pixel / 8;
+      int x, y;
+
+      dst = XCreateImage (dpy, s->xgwa.visual, s->xgwa.depth, ZPixmap, 0,
+                          0, W, H, 32, 0);
+      dst->data = (char *) calloc (dst->bytes_per_line, H);
+
+      /* Nearest-neighbour "cover": uniform scale + centre crop, so the
+         wallpaper keeps its aspect ratio and still fills the window.  The
+         pixels are darkened while copying (65%) so white or busy pictures
+         do not drown the consoles. */
+      {
+        double sc = (double) W / s->bg_image_w;
+        double scy = (double) H / s->bg_image_h;
+        double offx, offy;
+
+        if (scy > sc) sc = scy;
+        offx = (s->bg_image_w - W / sc) / 2.0;
+        offy = (s->bg_image_h - H / sc) / 2.0;
+
+        for (y = 0; y < H; y++)
+          {
+            int sy = (int) (offy + y / sc);
+            if (sy < 0) sy = 0;
+            if (sy >= s->bg_image_h) sy = s->bg_image_h - 1;
+
+            for (x = 0; x < W; x++)
+              {
+                int sx = (int) (offx + x / sc);
+                unsigned char *dp = (unsigned char *)
+                  dst->data + y * dst->bytes_per_line + x * 4;
+                if (sx < 0) sx = 0;
+                if (sx >= s->bg_image_w) sx = s->bg_image_w - 1;
+
+                if (bytes == 4)
+                  {
+                    unsigned char *sp = (unsigned char *)
+                      src->data + sy * src->bytes_per_line + sx * 4;
+                    dp[0] = (unsigned char) (sp[0] * 0.65);
+                    dp[1] = (unsigned char) (sp[1] * 0.65);
+                    dp[2] = (unsigned char) (sp[2] * 0.65);
+                    dp[3] = 0;
+                  }
+                else
+                  XPutPixel (dst, x, y, XGetPixel (src, sx, sy));
+              }
+          }
+      }
+
+      XPutImage (dpy, s->bg, gc, dst, 0, 0, 0, 0, W, H);
+      XDestroyImage (dst);
+      return;
+    }
 
   /* grid */
   XSetForeground (dpy, gc, 0x123f12);
@@ -1446,6 +1531,7 @@ static void hackterm_free (Display *dpy, Window window, void *closure)
   for (i = 0; i < MAXPANELS; i++) free_panel (&s->p[i]);
   if (s->xftdraw) XftDrawDestroy (s->xftdraw);
   if (s->bg) XFreePixmap (dpy, s->bg);
+  if (s->bg_image) XDestroyImage (s->bg_image);
   if (s->gc) XFreeGC (dpy, s->gc);
   if (s->font) XftFontClose (dpy, s->font);
   free (s);
@@ -1462,6 +1548,7 @@ static const char *hackterm_defaults [] = {
   "*titles:          True",
   "*speed:           1.0",
   "*layout:          grid",
+  "*bgImage:         (none)",
   "*theme:           phosphor",
   "*font:            Monospace",
   "*fontSize:        11",
@@ -1475,6 +1562,7 @@ static XrmOptionDescRec hackterm_options [] = {
   { "-font-size",  ".fontSize",  XrmoptionSepArg, 0 },
   { "-speed",      ".speed",     XrmoptionSepArg, 0 },
   { "-layout",     ".layout",    XrmoptionSepArg, 0 },
+  { "-bg-image",   ".bgImage",   XrmoptionSepArg, 0 },
   { "-titles",     ".titles",    XrmoptionNoArg, "True"  },
   { "-no-titles",  ".titles",    XrmoptionNoArg, "False" },
   { 0, 0, 0, 0 }
