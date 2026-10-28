@@ -11,7 +11,9 @@
            _label="Number of terminals" low="1" high="6" default="4"/>
 
    <number id="fontsize" type="spinbutton" arg="--font-size %"
-           _label="Font size" low="6" high="24" default="12"/>
+           _label="Font size" low="4" high="48" default="11"/>
+
+   <string id="font" _label="Font family" arg="--font %"/>
 
    <number id="speed" type="slider" arg="--speed %"
            _label="Typing speed" _low-label="Slow" _high-label="Fast"
@@ -28,27 +30,6 @@
     <option id="red"       _label="Alerte rouge"    arg-set="--theme red"/>
    </select>
 
-   <select id="font">
-    <option id="monospace" _label="Monospace (défaut)"
-            arg-set="--font Monospace"/>
-    <option id="dejavu"    _label="DejaVu Sans Mono"
-            arg-set="--font 'DejaVu Sans Mono'"/>
-    <option id="liberation" _label="Liberation Mono"
-            arg-set="--font 'Liberation Mono'"/>
-    <option id="courier"   _label="Courier 10 Pitch"
-            arg-set="--font 'Courier 10 Pitch'"/>
-    <option id="noto"      _label="Noto Mono"
-            arg-set="--font 'Noto Mono'"/>
-    <option id="ubuntu"    _label="Ubuntu Mono"
-            arg-set="--font 'Ubuntu Mono'"/>
-    <option id="c64"       _label="Classic Console (C64)"
-            arg-set="--font 'Classic Console'"/>
-    <option id="ocr"       _label="OCR A"
-            arg-set="--font 'OCR A'"/>
-    <option id="apple2"    _label="gallant12x22 (Apple II)"
-            arg-set="--font 'gallant12x22'"/>
-   </select>
-
    <boolean id="titles" _label="Window title bars"
             arg-set="--titles" arg-unset="--no-titles"/>
 
@@ -61,6 +42,11 @@
 A wall of consoles where a fictional intruder scans, brute-forces,
 escalates and exfiltrates.  Every IP address, password and hash is
 generated at random: none of it refers to anything real.
+
+Font family accepts any fontconfig family name, or the generic
+"Monospace" alias (the default, size 11).  Monospaced families work
+best: DejaVu Sans Mono, Liberation Mono, Noto Mono, Courier 10 Pitch,
+Ubuntu Mono, classic console (C64), OCR A, gallant12x22 (Apple II).
 
 Written for XScreenSaver; MIT licence.
  </_description>
