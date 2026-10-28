@@ -27,6 +27,10 @@
     <option id="random" _label="Fenêtres aléatoires"  arg-set="--layout random"/>
    </select>
 
+   <number id="moveinterval" type="spinbutton" arg="--move-interval %"
+           _label="Déplacement des fenêtres (s, 0 = jamais)"
+           low="0" high="300" default="15"/>
+
    <boolean id="overlap" _label="Autoriser le chevauchement"
             arg-set="--overlap" arg-unset="--no-overlap"/>
 

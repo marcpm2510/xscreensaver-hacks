@@ -74,6 +74,7 @@ typedef struct {
   int layout;                 /* 0 = grid, 1 = random windows */
   int allow_overlap;          /* random layout: may windows overlap? */
   double next_move;           /* next automatic window move (random mode) */
+  double move_interval;       /* seconds between moves; 0 = never */
   double speed;               /* multiplier: >1 = faster */
   hpanel p[MAXPANELS];
 } ht_state;
@@ -865,6 +866,8 @@ static void *hackterm_init (Display *dpy, Window window)
     if (l) free (l);
   }
   s->allow_overlap = get_boolean_resource (dpy, "overlap", "Overlap");
+  s->move_interval = get_float_resource (dpy, "moveInterval", "MoveInterval");
+  if (s->move_interval < 0) s->move_interval = 0;
   s->speed = get_float_resource (dpy, "speed", "Speed");
   if (s->speed <= 0) s->speed = 1.0;
 
@@ -1275,7 +1278,9 @@ static void layout_panels (ht_state *s)
       p->next_event = now_sec () + frnd (0.05, 1.2);
     }
 
-  s->next_move = now_sec () + frnd (8.0, 20.0);
+  s->next_move = now_sec () + (s->move_interval > 0
+                               ? s->move_interval * frnd (0.6, 1.4)
+                               : 1e9);
 
   if (s->layout == 1)
     build_background (s);
@@ -1505,7 +1510,7 @@ static unsigned long hackterm_draw (Display *dpy, Window window, void *closure)
 
   /* in "random" mode a window now and then jumps elsewhere, the way a
      desktop full of terminals gets nudged around */
-  if (s->layout == 1 && t > s->next_move)
+  if (s->layout == 1 && s->move_interval > 0 && t > s->next_move)
     {
       int victim = rnd (s->npanels);
 
@@ -1514,7 +1519,7 @@ static unsigned long hackterm_draw (Display *dpy, Window window, void *closure)
       if (s->allow_overlap || !scatter_panel (s, &s->p[victim]))
         { /* moved, or left in place */ }
 
-      s->next_move = t + frnd (7.0, 22.0);
+      s->next_move = t + s->move_interval * frnd (0.6, 1.4);
     }
 
   for (i = 0; i < s->npanels; i++)
@@ -1594,6 +1599,7 @@ static const char *hackterm_defaults [] = {
   "*speed:           1.0",
   "*layout:          grid",
   "*overlap:         True",
+  "*moveInterval:    15",
   "*bgImage:         (none)",
   "*theme:           phosphor",
   "*font:            Monospace",
@@ -1608,6 +1614,7 @@ static XrmOptionDescRec hackterm_options [] = {
   { "-font-size",  ".fontSize",  XrmoptionSepArg, 0 },
   { "-speed",      ".speed",     XrmoptionSepArg, 0 },
   { "-layout",     ".layout",    XrmoptionSepArg, 0 },
+  { "-move-interval", ".moveInterval", XrmoptionSepArg, 0 },
   { "-overlap",    ".overlap",   XrmoptionNoArg, "True"  },
   { "-no-overlap", ".overlap",   XrmoptionNoArg, "False" },
   { "-bg-image",   ".bgImage",   XrmoptionSepArg, 0 },
