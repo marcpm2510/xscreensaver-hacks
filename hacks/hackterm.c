@@ -1099,21 +1099,34 @@ static void draw_panel (ht_state *s, hpanel *p, double t)
 
       /* close button: white cross on a filled blue disc, as in Adwaita */
       {
-        int d  = s->char_h > 13 ? s->char_h + 3 : 15;
-        int cx = bx + 30;
-        int cy = p->y + (bar_h - d) / 2;
-        int m  = d / 3;
+        /* Even diameter so the disc has an exact pixel centre; the cross is
+           then drawn around that centre with equal arms at 45 degrees. */
+        int d   = s->char_h > 13 ? s->char_h + 3 : 15;
+        int cx  = bx + 30;
+        int cy, ccx, ccy, k;
+
+        if (d % 2) d++;
+        cy  = p->y + (bar_h - d) / 2;
+        ccx = cx + (d - 1) / 2;     /* true centre of the filled disc */
+        ccy = cy + (d - 1) / 2;
+        k   = (d - 1) / 2 - 5;      /* half arm: 5 px clear of the rim */
+        if (k < 2) k = 2;
 
         XSetForeground (s->dpy, s->gc, s->close_bg.pixel);
         XFillArc (s->dpy, s->window, s->gc, cx, cy, d, d, 0, 360 * 64);
 
+        /* Plot the two diagonals pixel by pixel: XDrawLine on a 45 degree
+           line adds stray pixels at the ends (Bresenham), which reads as a
+           chevron rather than a clean cross. */
         XSetForeground (s->dpy, s->gc, s->close_fg.pixel);
-        XSetLineAttributes (s->dpy, s->gc, 1, LineSolid, CapButt, JoinMiter);
-        XDrawLine (s->dpy, s->window, s->gc,
-                   cx + m, cy + m, cx + d - m, cy + d - m);
-        XDrawLine (s->dpy, s->window, s->gc,
-                   cx + d - m, cy + m, cx + m, cy + d - m);
-        XSetLineAttributes (s->dpy, s->gc, 0, LineSolid, CapButt, JoinMiter);
+        {
+          int i;
+          for (i = -k; i <= k; i++)
+            {
+              XDrawPoint (s->dpy, s->window, s->gc, ccx + i, ccy + i);
+              XDrawPoint (s->dpy, s->window, s->gc, ccx + i, ccy - i);
+            }
+        }
       }
     }
   else
