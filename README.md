@@ -10,6 +10,8 @@ l'arbre.
 
 🇬🇧 English version: [README.en.md](README.en.md)
 
+![Hackterm en plein écran, layout aléatoire et fond d'écran](docs/hackterm.png)
+
 ## Contenu
 
     hacks/hackterm.c             le hack (C, ~1630 lignes)

@@ -9,6 +9,8 @@ tree.
 
 🇫🇷 Version française : [README.md](README.md)
 
+![Hackterm en plein écran, random layout, with a wallpaper](docs/hackterm.png)
+
 ## Contents
 
     hacks/hackterm.c             the hack (C, ~1630 lines)
