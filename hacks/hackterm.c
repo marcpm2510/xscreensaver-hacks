@@ -905,7 +905,30 @@ static void *hackterm_init (Display *dpy, Window window)
       {
         int iw = 0, ih = 0;
         Pixmap m = 0;
-        Pixmap pm = file_to_pixmap (dpy, window, img, &iw, &ih, &m);
+        Pixmap pm = 0;
+        /* the bundled loader only understands PNG; check the signature first
+           so a JPEG produces a useful message instead of "libpng error" */
+        {
+          FILE *f = fopen (img, "rb");
+          unsigned char sig[8];
+          int png_p = 0;
+          if (!f)
+            fprintf (stderr, "%s: cannot open \"%s\"\n", progname, img);
+          else
+            {
+              if (fread (sig, 1, 8, f) == 8 &&
+                  !memcmp (sig, "\211PNG\r\n\032\n", 8))
+                png_p = 1;
+              fclose (f);
+              if (!png_p)
+                fprintf (stderr,
+                         "%s: \"%s\" is not a PNG.  Convert it first:\n"
+                         "    scripts/bg-convert.sh \"%s\"\n",
+                         progname, img, img);
+            }
+          if (png_p)
+            pm = file_to_pixmap (dpy, window, img, &iw, &ih, &m);
+        }
         if (pm)
           {
             s->bg_image = XGetImage (dpy, pm, 0, 0, iw, ih, ~0L, ZPixmap);
@@ -913,9 +936,7 @@ static void *hackterm_init (Display *dpy, Window window)
             s->bg_image_h = ih;
             XFreePixmap (dpy, pm);
           }
-        else
-          fprintf (stderr, "%s: cannot load background image \"%s\"\n",
-                   progname, img);
+
         if (m) XFreePixmap (dpy, m);
       }
     if (img) free (img);
