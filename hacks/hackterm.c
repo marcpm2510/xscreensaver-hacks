@@ -62,7 +62,6 @@ typedef struct {
   XftFont *font;
   XftDraw *xftdraw;
   XftColor pal[C_NPAL];
-  XftColor close_bg, close_fg;   /* GNOME-style blue close badge */
   GC gc;
   int char_w, char_h;
   int npanels;
@@ -778,7 +777,7 @@ static const ht_theme themes[] = {
   { "phosphor", {
       "#000000", "#33ff33", "#33ff33", "#33ff33", "#33ff33",
       "#33ff33", "#33ff33", "#33ff33", "#33ff33",
-      "#d0d0d0", "#2b2b2b" } },
+      "#d0d0d0", "#3e3e3e" } },
   { "green", {
       "#000000", "#b9c6b9", "#ffffff", "#22ff77", "#ffd23f",
       "#ff4d4d", "#5c6b5c", "#4fd6ff", "#ff6ad5",
@@ -881,11 +880,6 @@ static void *hackterm_init (Display *dpy, Window window)
       XftColorAllocName (dpy, s->xgwa.visual, s->xgwa.colormap,
                          th->pal[i], &s->pal[i]);
   }
-
-  XftColorAllocName (dpy, s->xgwa.visual, s->xgwa.colormap,
-                     "#3584e4", &s->close_bg);
-  XftColorAllocName (dpy, s->xgwa.visual, s->xgwa.colormap,
-                     "#ffffff", &s->close_fg);
 
   s->gc = XCreateGC (dpy, window, 0, 0);
 
@@ -1073,7 +1067,7 @@ static void draw_panel (ht_state *s, hpanel *p, double t)
   if (s->show_titles)
     {
       int bar_h = s->char_h + 9;
-      int bx, btn_y = p->y + (bar_h - 9) / 2;
+      int bx;
       int tw;
 
       fill_rect (s, p->x, p->y, p->w, bar_h, C_TITLE_BG);
@@ -1090,43 +1084,25 @@ static void draw_panel (ht_state *s, hpanel *p, double t)
          The three glyphs are 9 px wide with 7 px gaps, and the block ends
          5 px before the panel edge -- otherwise the close cross falls
          outside the panel clip and is invisible. */
-      bx = p->x + p->w - 52;
-      fill_rect (s, bx, btn_y + 4, 9, 1, C_TITLE_FG);             /* - */
-      fill_rect (s, bx + 16, btn_y + 1, 9, 1, C_TITLE_FG);        /* square */
-      fill_rect (s, bx + 16, btn_y + 9, 9, 1, C_TITLE_FG);
-      fill_rect (s, bx + 16, btn_y + 1, 1, 9, C_TITLE_FG);
-      fill_rect (s, bx + 24, btn_y + 1, 1, 9, C_TITLE_FG);
-
-      /* close button: white cross on a filled blue disc, as in Adwaita */
+      bx = p->x + p->w - 62;
       {
-        /* Even diameter so the disc has an exact pixel centre; the cross is
-           then drawn around that centre with equal arms at 45 degrees. */
-        int d   = s->char_h > 13 ? s->char_h + 3 : 15;
-        int cx  = bx + 30;
-        int cy, ccx, ccy, k;
+        int by = p->y + (bar_h - 13) / 2;   /* 13 px tall glyph box */
 
-        if (d % 2) d++;
-        cy  = p->y + (bar_h - d) / 2;
-        ccx = cx + (d - 1) / 2;     /* true centre of the filled disc */
-        ccy = cy + (d - 1) / 2;
-        k   = (d - 1) / 2 - 5;      /* half arm: 5 px clear of the rim */
-        if (k < 2) k = 2;
-
-        XSetForeground (s->dpy, s->gc, s->close_bg.pixel);
-        XFillArc (s->dpy, s->window, s->gc, cx, cy, d, d, 0, 360 * 64);
-
-        /* Plot the two diagonals pixel by pixel: XDrawLine on a 45 degree
-           line adds stray pixels at the ends (Bresenham), which reads as a
-           chevron rather than a clean cross. */
-        XSetForeground (s->dpy, s->gc, s->close_fg.pixel);
-        {
-          int i;
-          for (i = -k; i <= k; i++)
-            {
-              XDrawPoint (s->dpy, s->window, s->gc, ccx + i, ccy + i);
-              XDrawPoint (s->dpy, s->window, s->gc, ccx + i, ccy - i);
-            }
-        }
+        /* minimize: thick dash */
+        fill_rect (s, bx, by + 6, 14, 2, C_TITLE_FG);
+        /* maximize: 2 px square outline */
+        fill_rect (s, bx + 24, by, 13, 2, C_TITLE_FG);
+        fill_rect (s, bx + 24, by + 11, 13, 2, C_TITLE_FG);
+        fill_rect (s, bx + 24, by, 2, 13, C_TITLE_FG);
+        fill_rect (s, bx + 35, by, 2, 13, C_TITLE_FG);
+        /* close: thick cross, same visual weight as the other two */
+        XSetForeground (s->dpy, s->gc, s->pal[C_TITLE_FG].pixel);
+        XSetLineAttributes (s->dpy, s->gc, 2, LineSolid, CapButt, JoinMiter);
+        XDrawLine (s->dpy, s->window, s->gc,
+                   bx + 46, by + 1, bx + 58, by + 12);
+        XDrawLine (s->dpy, s->window, s->gc,
+                   bx + 58, by + 1, bx + 46, by + 12);
+        XSetLineAttributes (s->dpy, s->gc, 0, LineSolid, CapButt, JoinMiter);
       }
     }
   else
