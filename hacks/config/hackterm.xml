@@ -19,6 +19,11 @@
            _label="Typing speed" _low-label="Slow" _high-label="Fast"
            low="0.2" high="4.0" default="1.0"/>
 
+   <select id="layout">
+    <option id="grid"   _label="Grille (par défaut)"  arg-set="--layout grid"/>
+    <option id="random" _label="Fenêtres aléatoires"  arg-set="--layout random"/>
+   </select>
+
    <select id="theme">
     <option id="phosphor"  _label="Vert phosphore (mono)" arg-set="--theme phosphor"/>
     <option id="green"     _label="Vert + accents"  arg-set="--theme green"/>

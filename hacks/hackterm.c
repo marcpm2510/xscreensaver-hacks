@@ -40,6 +40,7 @@ typedef struct {
 
   hline *lines;               /* visible lines, 0..nlines-1 */
   int nlines;
+  int alloc_rows;
 
   char prompt[48];            /* "root@kali:~# " */
   char cmd[MAXLINE];          /* the command being typed */
@@ -66,6 +67,8 @@ typedef struct {
   int char_w, char_h;
   int npanels;
   int show_titles;
+  int layout;                 /* 0 = grid, 1 = random windows */
+  double next_move;           /* next automatic window move (random mode) */
   double speed;               /* multiplier: >1 = faster */
   hpanel p[MAXPANELS];
 } ht_state;
@@ -848,6 +851,13 @@ static void *hackterm_init (Display *dpy, Window window)
   if (s->npanels < 1) s->npanels = 1;
   if (s->npanels > MAXPANELS) s->npanels = MAXPANELS;
   s->show_titles = get_boolean_resource (dpy, "titles", "Titles");
+  {
+    char *l = get_string_resource (dpy, "layout", "Layout");
+    s->layout = 0;
+    if (l && (!strcasecmp (l, "random") || !strcasecmp (l, "scattered")))
+      s->layout = 1;
+    if (l) free (l);
+  }
   s->speed = get_float_resource (dpy, "speed", "Speed");
   if (s->speed <= 0) s->speed = 1.0;
 
@@ -904,6 +914,58 @@ static void *hackterm_init (Display *dpy, Window window)
 /* ------------------------------------------------------------------ */
 /* layout                                                              */
 
+static void set_panel_geom (ht_state *s, hpanel *p, int x, int y, int w, int h)
+{
+  int title_h = s->show_titles ? s->char_h + 9 : 4;
+
+  p->x = x;  p->y = y;  p->w = w;  p->h = h;
+  p->tx = x + 6;
+  p->ty = y + title_h + 2;
+  p->tw = w - 12;
+  p->th = h - title_h - 8;
+
+  p->cols = p->tw / s->char_w;
+  p->rows = p->th / s->char_h;
+  if (p->cols < 8)  p->cols = 8;
+  if (p->rows < 2)  p->rows = 2;
+
+  if (!p->lines || p->alloc_rows != p->rows)
+    {
+      hline *nl = (hline *) calloc (p->rows, sizeof (hline));
+      int c = 0;
+      if (p->lines)
+        {
+          c = p->nlines < p->rows ? p->nlines : p->rows;
+          /* keep the newest lines, bottom aligned */
+          memcpy (nl, p->lines + (p->nlines - c), c * sizeof (hline));
+          free (p->lines);
+        }
+      p->lines = nl;
+      p->nlines = c;
+      p->alloc_rows = p->rows;
+    }
+}
+
+/* Place one panel at a random size somewhere on the screen, keeping it big
+   enough to stay readable.  Used by the "random" layout. */
+static void scatter_panel (ht_state *s, hpanel *p)
+{
+  int W = s->xgwa.width, H = s->xgwa.height;
+  int w = W * frnd (0.30, 0.58);
+  int h = H * frnd (0.30, 0.58);
+  int x, y;
+
+  if (w > W - 8) w = W - 8;
+  if (h > H - 8) h = H - 8;
+  if (w < s->char_w * 24 + 12) w = s->char_w * 24 + 12;
+  if (h < s->char_h * 8 + 20)  h = s->char_h * 8 + 20;
+
+  x = (W - w) * frnd (0.0, 1.0);
+  y = (H - h) * frnd (0.0, 1.0);
+
+  set_panel_geom (s, p, x, y, w, h);
+}
+
 static void layout_panels (ht_state *s)
 {
   int n = s->npanels;
@@ -918,44 +980,25 @@ static void layout_panels (ht_state *s)
   for (i = 0; i < s->npanels; i++)
     {
       hpanel *p = &s->p[i];
-      int cx = i % cols, cy = i / cols;
-      int title_h;
 
-      p->x = gap + cx * (cw + gap);
-      p->y = gap + cy * (ch + gap);
-      p->w = cw;
-      p->h = ch;
-
-      title_h = s->show_titles ? s->char_h + 9 : 4;
-      p->tx = p->x + 6;
-      p->ty = p->y + title_h + 2;
-      p->tw = p->w - 12;
-      p->th = p->h - title_h - 8;
-
-      p->cols = p->tw / s->char_w;
-      p->rows = p->th / s->char_h;
-      if (p->cols < 4) p->cols = 4;
-      if (p->rows < 2) p->rows = 2;
-
-      {
-        hline *nl = (hline *) calloc (p->rows, sizeof (hline));
-        if (p->lines)
-          {
-            int c = p->nlines < p->rows ? p->nlines : p->rows;
-            memcpy (nl, p->lines + (p->nlines - c), c * sizeof (hline));
-            p->nlines = c;
-            free (p->lines);
-          }
-        else
-          p->nlines = 0;
-        p->lines = nl;
-      }
+      if (s->layout == 1)
+        scatter_panel (s, p);
+      else
+        {
+          int cx = i % cols, cy = i / cols;
+          set_panel_geom (s, p,
+                          gap + cx * (cw + gap),
+                          gap + cy * (ch + gap),
+                          cw, ch);
+        }
 
       p->state = ST_HOLD;
       p->cmd_pos = 0;
       p->nout = p->out_pos = 0;
       p->next_event = now_sec () + frnd (0.05, 1.2);
     }
+
+  s->next_move = now_sec () + frnd (8.0, 20.0);
 }
 
 /* ------------------------------------------------------------------ */
@@ -1175,6 +1218,15 @@ static unsigned long hackterm_draw (Display *dpy, Window window, void *closure)
 
   fill_rect (s, 0, 0, s->xgwa.width, s->xgwa.height, C_BG);
 
+  /* in "random" mode a window now and then jumps elsewhere, the way a
+     desktop full of terminals gets nudged around */
+  if (s->layout == 1 && t > s->next_move)
+    {
+      int victim = rnd (s->npanels);
+      scatter_panel (s, &s->p[victim]);
+      s->next_move = t + frnd (7.0, 22.0);
+    }
+
   for (i = 0; i < s->npanels; i++)
     {
       update_panel (s, &s->p[i], t);
@@ -1221,6 +1273,7 @@ static const char *hackterm_defaults [] = {
   "*panels:          4",
   "*titles:          True",
   "*speed:           1.0",
+  "*layout:          grid",
   "*theme:           phosphor",
   "*font:            Monospace",
   "*fontSize:        11",
@@ -1233,6 +1286,7 @@ static XrmOptionDescRec hackterm_options [] = {
   { "-font",       ".font",      XrmoptionSepArg, 0 },
   { "-font-size",  ".fontSize",  XrmoptionSepArg, 0 },
   { "-speed",      ".speed",     XrmoptionSepArg, 0 },
+  { "-layout",     ".layout",    XrmoptionSepArg, 0 },
   { "-titles",     ".titles",    XrmoptionNoArg, "True"  },
   { "-no-titles",  ".titles",    XrmoptionNoArg, "False" },
   { 0, 0, 0, 0 }
