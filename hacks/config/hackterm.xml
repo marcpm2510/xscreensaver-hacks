@@ -19,6 +19,14 @@
            _label="Typing speed" _low-label="Slow" _high-label="Fast"
            low="0.2" high="4.0" default="1.0"/>
 
+   <select id="frame">
+    <option id="flat"    _label="Cadre plat"        arg-set="--frame flat"/>
+    <option id="bevel"   _label="Cadre 3D (Motif)"  arg-set="--frame bevel"/>
+    <option id="shadow"  _label="Ombre portée"      arg-set="--frame shadow"/>
+    <option id="tabs"    _label="Onglets"           arg-set="--frame tabs"/>
+    <option id="minimal" _label="Sans cadre"        arg-set="--frame minimal"/>
+   </select>
+
    <select id="theme">
     <option id="phosphor"  _label="Vert phosphore (mono)" arg-set="--theme phosphor"/>
     <option id="green"     _label="Vert + accents"  arg-set="--theme green"/>

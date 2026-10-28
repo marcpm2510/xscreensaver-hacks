@@ -56,7 +56,24 @@ Depuis un arbre XScreenSaver configuré (`./configure` déjà passé) :
     ./hackterm -panels 4 -speed 1.6
 
 Options : `-panels 1..6`, `-speed 0.2..4`, `-theme <nom>`, `-font`,
-`-font-size`, `-titles` / `-no-titles`, `-help`.
+`-font-size`, `-frame <nom>`, `-titles` / `-no-titles`, `-help`.
+
+## Habillage des fenêtres
+
+Chaque console est dessinée comme une petite fenêtre, avec cinq styles au
+choix (`-frame`, ou le menu « Cadre » du dialogue) :
+
+- `flat` (défaut) — bordure fine d'une seule couleur, barre de titre pleine
+- `bevel` — relief 3D façon Motif/xterm : arêtes claires en haut à gauche,
+  ombrées en bas à droite
+- `shadow` — bordure fine plus une ombre portée décalée sous le panneau
+- `tabs` — onglet surélevé autour du titre, sur une barre plus sombre
+- `minimal` — aucun cadre ni barre : uniquement le texte, pour gagner de
+  la place quand on affiche 4 ou 6 consoles
+
+Les zones d'ombre sont tramées (damier) plutôt que d'utiliser une couleur
+plus sombre, pour rester lisibles même avec un thème strictement
+monochrome comme `phosphor`.
 
 ## Installer dans le démon
 
