@@ -27,6 +27,9 @@
     <option id="random" _label="Fenêtres aléatoires"  arg-set="--layout random"/>
    </select>
 
+   <boolean id="overlap" _label="Autoriser le chevauchement"
+            arg-set="--overlap" arg-unset="--no-overlap"/>
+
    <select id="theme">
     <option id="phosphor"  _label="Vert phosphore (mono)" arg-set="--theme phosphor"/>
     <option id="green"     _label="Vert + accents"  arg-set="--theme green"/>

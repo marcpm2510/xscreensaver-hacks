@@ -72,6 +72,7 @@ typedef struct {
   int npanels;
   int show_titles;
   int layout;                 /* 0 = grid, 1 = random windows */
+  int allow_overlap;          /* random layout: may windows overlap? */
   double next_move;           /* next automatic window move (random mode) */
   double speed;               /* multiplier: >1 = faster */
   hpanel p[MAXPANELS];
@@ -863,6 +864,7 @@ static void *hackterm_init (Display *dpy, Window window)
       s->layout = 1;
     if (l) free (l);
   }
+  s->allow_overlap = get_boolean_resource (dpy, "overlap", "Overlap");
   s->speed = get_float_resource (dpy, "speed", "Speed");
   if (s->speed <= 0) s->speed = 1.0;
 
@@ -1026,42 +1028,59 @@ static double overlap_ratio (ht_state *s, hpanel *skip,
 
 /* Place one panel at a random size somewhere on the screen.  Candidates that
    would bury the window under its neighbours are rejected: every console must
-   stay at least partly on screen, title bar included. */
-static void scatter_panel (ht_state *s, hpanel *p)
+   stay at least partly on screen, title bar included.  With `overlap' turned
+   off, only positions that touch no other panel are accepted (the size is
+   shrunk step by step if the screen is too crowded).  Returns TRUE when an
+   acceptable spot was found. */
+static Bool scatter_panel (ht_state *s, hpanel *p)
 {
   int W = s->xgwa.width, H = s->xgwa.height;
   double maxfrac = (s->npanels >= 5) ? 0.44 : 0.55;
+  double target  = s->allow_overlap ? 0.12 : 0.0;
   int best_x = 0, best_y = 0, best_w = 0, best_h = 0;
   double best = 2.0;
-  int tries;
+  int pass, tries;
 
-  for (tries = 0; tries < 60; tries++)
+  for (pass = 0; pass < 4; pass++)
     {
-      int w = W * frnd (0.30, maxfrac);
-      int h = H * frnd (0.30, maxfrac);
-      int x, y;
-      double r;
+      double frac = maxfrac * (1.0 - 0.13 * pass);
 
-      if (w > W - 8) w = W - 8;
-      if (h > H - 8) h = H - 8;
-      if (w < s->char_w * 24 + 12) w = s->char_w * 24 + 12;
-      if (h < s->char_h * 8 + 20)  h = s->char_h * 8 + 20;
-      if (w > W - 8) w = W - 8;
-      if (h > H - 8) h = H - 8;
-
-      x = (W - w) * frnd (0.0, 1.0);
-      y = (H - h) * frnd (0.0, 1.0);
-
-      r = overlap_ratio (s, p, x, y, w, h);
-      if (r < best)
+      for (tries = 0; tries < 120; tries++)
         {
-          best = r; best_x = x; best_y = y; best_w = w; best_h = h;
+          int w = W * frnd (0.30 * (1.0 - 0.10 * pass), frac);
+          int h = H * frnd (0.30 * (1.0 - 0.10 * pass), frac);
+          int x, y;
+          double r;
+
+          if (w > W - 8) w = W - 8;
+          if (h > H - 8) h = H - 8;
+          if (w < s->char_w * 24 + 12) w = s->char_w * 24 + 12;
+          if (h < s->char_h * 8 + 20)  h = s->char_h * 8 + 20;
+          if (w > W - 8) w = W - 8;
+          if (h > H - 8) h = H - 8;
+
+          x = (W - w) * frnd (0.0, 1.0);
+          y = (H - h) * frnd (0.0, 1.0);
+
+          r = overlap_ratio (s, p, x, y, w, h);
+          if (r < best)
+            {
+              best = r;
+              best_x = x; best_y = y; best_w = w; best_h = h;
+            }
+          if (r <= target)
+            {
+              set_panel_geom (s, p, x, y, w, h);
+              return True;
+            }
         }
-      if (r <= 0.12)
-        break;                      /* comfortable, stop looking */
+      if (best <= 0.0) break;
     }
 
+  /* nothing clean: remember the placement anyway on the first pass (the
+     layout has to put the panel somewhere), repositioning passes give up */
   set_panel_geom (s, p, best_x, best_y, best_w, best_h);
+  return (best <= target);
 }
 
 /* ------------------------------------------------------------------ */
@@ -1240,7 +1259,7 @@ static void layout_panels (ht_state *s)
       hpanel *p = &s->p[i];
 
       if (s->layout == 1)
-        scatter_panel (s, p);
+        (void) scatter_panel (s, p);
       else
         {
           int cx = i % cols, cy = i / cols;
@@ -1489,7 +1508,12 @@ static unsigned long hackterm_draw (Display *dpy, Window window, void *closure)
   if (s->layout == 1 && t > s->next_move)
     {
       int victim = rnd (s->npanels);
-      scatter_panel (s, &s->p[victim]);
+
+      /* with overlap disabled a window only moves if there is a free spot;
+         otherwise it stays where it is rather than covering a neighbour */
+      if (s->allow_overlap || !scatter_panel (s, &s->p[victim]))
+        { /* moved, or left in place */ }
+
       s->next_move = t + frnd (7.0, 22.0);
     }
 
@@ -1569,6 +1593,7 @@ static const char *hackterm_defaults [] = {
   "*titles:          True",
   "*speed:           1.0",
   "*layout:          grid",
+  "*overlap:         True",
   "*bgImage:         (none)",
   "*theme:           phosphor",
   "*font:            Monospace",
@@ -1583,6 +1608,8 @@ static XrmOptionDescRec hackterm_options [] = {
   { "-font-size",  ".fontSize",  XrmoptionSepArg, 0 },
   { "-speed",      ".speed",     XrmoptionSepArg, 0 },
   { "-layout",     ".layout",    XrmoptionSepArg, 0 },
+  { "-overlap",    ".overlap",   XrmoptionNoArg, "True"  },
+  { "-no-overlap", ".overlap",   XrmoptionNoArg, "False" },
   { "-bg-image",   ".bgImage",   XrmoptionSepArg, 0 },
   { "-titles",     ".titles",    XrmoptionNoArg, "True"  },
   { "-no-titles",  ".titles",    XrmoptionNoArg, "False" },
