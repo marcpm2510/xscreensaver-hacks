@@ -63,6 +63,7 @@ typedef struct {
   XftFont *font;
   XftDraw *xftdraw;
   XftColor pal[C_NPAL];
+  Pixmap bg;                  /* pre-rendered "hacking" backdrop (random layout) */
   GC gc;
   int char_w, char_h;
   int npanels;
@@ -828,6 +829,7 @@ static const ht_theme *lookup_theme (const char *name)
 /* init                                                                */
 
 static void layout_panels (ht_state *s);
+static void build_background (ht_state *s);
 
 static void free_panel (hpanel *p)
 {
@@ -1015,6 +1017,107 @@ static void scatter_panel (ht_state *s, hpanel *p)
   set_panel_geom (s, p, best_x, best_y, best_w, best_h);
 }
 
+/* ------------------------------------------------------------------ */
+/* backdrop used with the random layout: a dark grid, radar rings, circuit
+   traces and scraps of technical text, all in very low-contrast green so the
+   consoles stay readable on top.  Rendered once into a pixmap and blitted. */
+
+static void build_background (ht_state *s)
+{
+  Display *dpy = s->dpy;
+  Window win = s->window;
+  int W = s->xgwa.width, H = s->xgwa.height;
+  GC gc = s->gc;
+  XftColor dark;
+  XftDraw *bd;
+  int i;
+
+  if (s->bg) { XFreePixmap (dpy, s->bg); s->bg = 0; }
+  if (W <= 0 || H <= 0) return;
+
+  s->bg = XCreatePixmap (dpy, win, W, H, s->xgwa.depth);
+  XSetClipMask (dpy, gc, None);
+
+  /* base */
+  XSetForeground (dpy, gc, s->pal[C_BG].pixel);
+  XFillRectangle (dpy, s->bg, gc, 0, 0, W, H);
+
+  /* grid */
+  XSetForeground (dpy, gc, 0x123f12);
+  for (i = 0; i < W; i += 48)
+    XDrawLine (dpy, s->bg, gc, i, 0, i, H);
+  for (i = 0; i < H; i += 48)
+    XDrawLine (dpy, s->bg, gc, 0, i, W, i);
+
+  /* faint major grid every 4 cells */
+  XSetForeground (dpy, gc, 0x1b5a1b);
+  for (i = 0; i < W; i += 192)
+    XDrawLine (dpy, s->bg, gc, i, 0, i, H);
+  for (i = 0; i < H; i += 192)
+    XDrawLine (dpy, s->bg, gc, 0, i, W, i);
+
+  /* radar rings with cross hairs */
+  XSetForeground (dpy, gc, 0x1f6b21);
+  for (i = 0; i < 4; i++)
+    {
+      int cx = 60 + rnd (W - 120);
+      int cy = 60 + rnd (H - 120);
+      int r0 = 40 + rnd (110);
+      int k;
+      for (k = 1; k <= 3; k++)
+        XDrawArc (dpy, s->bg, gc, cx - r0 * k / 3, cy - r0 * k / 3,
+                  r0 * k / 3 * 2, r0 * k / 3 * 2, 0, 360 * 64);
+      XDrawLine (dpy, s->bg, gc, cx - r0, cy, cx + r0, cy);
+      XDrawLine (dpy, s->bg, gc, cx, cy - r0, cx, cy + r0);
+      XFillArc (dpy, s->bg, gc, cx - 2, cy - 2, 5, 5, 0, 360 * 64);
+    }
+
+  /* circuit traces: orthogonal runs with a node at each corner */
+  XSetForeground (dpy, gc, 0x1a5a1c);
+  for (i = 0; i < 26; i++)
+    {
+      int x = rnd (W), y = rnd (H);
+      int segs = 2 + rnd (4);
+      int k;
+      for (k = 0; k < segs; k++)
+        {
+          int nx = x + (rnd (2) ? 1 : -1) * (20 + rnd (140));
+          int ny = y + (rnd (2) ? 1 : -1) * (20 + rnd (90));
+          if (rnd (2))
+            { XDrawLine (dpy, s->bg, gc, x, y, nx, y);
+              XDrawLine (dpy, s->bg, gc, nx, y, nx, ny); }
+          else
+            { XDrawLine (dpy, s->bg, gc, x, y, x, ny);
+              XDrawLine (dpy, s->bg, gc, x, ny, nx, ny); }
+          XFillRectangle (dpy, s->bg, gc, nx - 1, ny - 1, 3, 3);
+          x = nx; y = ny;
+        }
+    }
+
+  /* scraps of technical text */
+  XftColorAllocName (dpy, s->xgwa.visual, s->xgwa.colormap,
+                     "#206b24", &dark);
+  bd = XftDrawCreate (dpy, s->bg, s->xgwa.visual, s->xgwa.colormap);
+  {
+    static const char *junk[] = {
+      "TCP SYN  10.0.0.42:443", "0x7f3a9c2b", "AUTH OK", "nmap -sS -T4",
+      "ssh-ed25519 AAAAC3", "TLS1.3 / AES-256-GCM", "uid=0(root)", "SYN-ACK",
+      "0xdeadbeef", "/etc/shadow", "handshake complete", "GID 0",
+      "kernel 6.6.9", "SELECT * FROM users", "GET /.env HTTP/1.1"
+    };
+    int n = sizeof (junk) / sizeof (*junk);
+    for (i = 0; i < 40; i++)
+      {
+        const char *t = junk[rnd (n)];
+        int x = rnd (W - 220), y = 20 + rnd (H - 40);
+        XftDrawStringUtf8 (bd, &dark, s->font, x, y,
+                           (FcChar8 *) t, strlen (t));
+      }
+  }
+  XftDrawDestroy (bd);
+  XftColorFree (dpy, s->xgwa.visual, s->xgwa.colormap, &dark);
+}
+
 static void layout_panels (ht_state *s)
 {
   int n = s->npanels;
@@ -1048,6 +1151,9 @@ static void layout_panels (ht_state *s)
     }
 
   s->next_move = now_sec () + frnd (8.0, 20.0);
+
+  if (s->layout == 1)
+    build_background (s);
 }
 
 /* ------------------------------------------------------------------ */
@@ -1265,7 +1371,12 @@ static unsigned long hackterm_draw (Display *dpy, Window window, void *closure)
   double t = now_sec ();
   int i;
 
-  fill_rect (s, 0, 0, s->xgwa.width, s->xgwa.height, C_BG);
+  XSetClipMask (s->dpy, s->gc, None);
+  if (s->bg)
+    XCopyArea (s->dpy, s->bg, s->window, s->gc, 0, 0,
+               s->xgwa.width, s->xgwa.height, 0, 0);
+  else
+    fill_rect (s, 0, 0, s->xgwa.width, s->xgwa.height, C_BG);
 
   /* in "random" mode a window now and then jumps elsewhere, the way a
      desktop full of terminals gets nudged around */
@@ -1334,6 +1445,7 @@ static void hackterm_free (Display *dpy, Window window, void *closure)
 
   for (i = 0; i < MAXPANELS; i++) free_panel (&s->p[i]);
   if (s->xftdraw) XftDrawDestroy (s->xftdraw);
+  if (s->bg) XFreePixmap (dpy, s->bg);
   if (s->gc) XFreeGC (dpy, s->gc);
   if (s->font) XftFontClose (dpy, s->font);
   free (s);
