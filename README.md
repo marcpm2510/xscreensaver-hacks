@@ -16,6 +16,10 @@ l'arbre.
 
 ## Ce que ça fait
 
+Chaque console est dessinée comme une fenêtre GNOME Terminal : barre de
+titre anthracite, titre centré, boutons réduire/agrandir/fermer à droite,
+et le texte directement sous la barre.
+
 Jusqu'à 6 panneaux indépendants, chacun avec son rôle et son invite
 (`root@kali`, `root@target`, `root@sniffer`, `msf6`). Chaque panneau tire
 au hasard parmi 34 scénarios et ne rejoue jamais deux fois de suite le

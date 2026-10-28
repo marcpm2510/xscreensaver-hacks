@@ -777,7 +777,7 @@ static const ht_theme themes[] = {
   { "phosphor", {
       "#000000", "#33ff33", "#33ff33", "#33ff33", "#33ff33",
       "#33ff33", "#33ff33", "#33ff33", "#33ff33",
-      "#33ff33", "#000000" } },
+      "#d0d0d0", "#2b2b2b" } },
   { "green", {
       "#000000", "#b9c6b9", "#ffffff", "#22ff77", "#ffd23f",
       "#ff4d4d", "#5c6b5c", "#4fd6ff", "#ff6ad5",
@@ -926,11 +926,11 @@ static void layout_panels (ht_state *s)
       p->w = cw;
       p->h = ch;
 
-      title_h = s->show_titles ? s->char_h + 6 : 4;
-      p->tx = p->x + 8;
-      p->ty = p->y + title_h + 4;
-      p->tw = p->w - 16;
-      p->th = p->h - title_h - 12;
+      title_h = s->show_titles ? s->char_h + 9 : 4;
+      p->tx = p->x + 6;
+      p->ty = p->y + title_h + 2;
+      p->tw = p->w - 12;
+      p->th = p->h - title_h - 8;
 
       p->cols = p->tw / s->char_w;
       p->rows = p->th / s->char_h;
@@ -1055,24 +1055,46 @@ static void draw_panel (ht_state *s, hpanel *p, double t)
     XSetClipRectangles (s->dpy, s->gc, 0, 0, &cr, 1, Unsorted);
   }
 
-  /* body + border */
+  /* body + 1px window outline */
   fill_rect (s, p->x, p->y, p->w, p->h, C_BG);
-  fill_rect (s, p->x, p->y, p->w, 1, p->accent);
-  fill_rect (s, p->x, p->y + p->h - 1, p->w, 1, p->accent);
-  fill_rect (s, p->x, p->y, 1, p->h, p->accent);
-  fill_rect (s, p->x + p->w - 1, p->y, 1, p->h, p->accent);
+  fill_rect (s, p->x, p->y, 1, p->h, C_TITLE_BG);
+  fill_rect (s, p->x + p->w - 1, p->y, 1, p->h, C_TITLE_BG);
+  fill_rect (s, p->x, p->y + p->h - 1, p->w, 1, C_TITLE_BG);
 
-  /* title bar */
+  /* GNOME-Terminal-like window: no coloured frame, a thin dark title bar
+     across the top with a centred title and minimise/maximise/close
+     buttons on the right. */
   if (s->show_titles)
     {
-      fill_rect (s, p->x + 1, p->y + 1, p->w - 2, s->char_h + 4, C_TITLE_BG);
-      baseline = p->y + 1 + s->char_h + 1;
-      draw_text (s, p->tx, baseline, p->title, C_TITLE_FG, p->cols);
-      /* little status pips, right aligned */
-      fill_rect (s, p->x + p->w - 22, p->y + 5, 4, 4, p->accent);
-      fill_rect (s, p->x + p->w - 16, p->y + 5, 4, 4, p->accent);
-      fill_rect (s, p->x + p->w - 10, p->y + 5, 4, 4, p->accent);
+      int bar_h = s->char_h + 9;
+      int bx, btn_y = p->y + (bar_h - 9) / 2;
+      int tw;
+
+      fill_rect (s, p->x, p->y, p->w, bar_h, C_TITLE_BG);
+      fill_rect (s, p->x, p->y + bar_h - 1, p->w, 1, C_TITLE_BG);
+
+      /* title, centred */
+      tw = text_width (s, p->title, strlen (p->title));
+      if (tw > p->w - 80) tw = p->w - 80;
+      draw_text (s, p->x + (p->w - tw) / 2,
+                 p->y + (bar_h - s->char_h) / 2 + s->font->ascent,
+                 p->title, C_TITLE_FG, p->cols);
+
+      /* window buttons, right aligned: minimize, maximize, close */
+      bx = p->x + p->w - 34;
+      fill_rect (s, bx, btn_y + 4, 9, 1, C_TITLE_FG);             /* - */
+      fill_rect (s, bx + 15, btn_y + 1, 9, 1, C_TITLE_FG);        /* square */
+      fill_rect (s, bx + 15, btn_y + 8, 9, 1, C_TITLE_FG);
+      fill_rect (s, bx + 15, btn_y + 1, 1, 8, C_TITLE_FG);
+      fill_rect (s, bx + 23, btn_y + 1, 1, 8, C_TITLE_FG);
+      XSetForeground (s->dpy, s->gc, s->pal[C_TITLE_FG].pixel);
+      XDrawLine (s->dpy, s->window, s->gc,
+                 bx + 30, btn_y + 1, bx + 38, btn_y + 9);         /* x */
+      XDrawLine (s->dpy, s->window, s->gc,
+                 bx + 38, btn_y + 1, bx + 30, btn_y + 9);
     }
+  else
+    fill_rect (s, p->x, p->y, p->w, 1, C_DIM);
 
   /* everything below is clipped to the text area, otherwise over-long
      lines spill into the neighbouring panel (or off the window). */
