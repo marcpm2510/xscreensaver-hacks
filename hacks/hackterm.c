@@ -62,6 +62,7 @@ typedef struct {
   XftFont *font;
   XftDraw *xftdraw;
   XftColor pal[C_NPAL];
+  XftColor close_bg, close_fg;   /* GNOME-style blue close badge */
   GC gc;
   int char_w, char_h;
   int npanels;
@@ -881,6 +882,11 @@ static void *hackterm_init (Display *dpy, Window window)
                          th->pal[i], &s->pal[i]);
   }
 
+  XftColorAllocName (dpy, s->xgwa.visual, s->xgwa.colormap,
+                     "#3584e4", &s->close_bg);
+  XftColorAllocName (dpy, s->xgwa.visual, s->xgwa.colormap,
+                     "#ffffff", &s->close_fg);
+
   s->gc = XCreateGC (dpy, window, 0, 0);
 
   /* panel roles */
@@ -1084,21 +1090,31 @@ static void draw_panel (ht_state *s, hpanel *p, double t)
          The three glyphs are 9 px wide with 7 px gaps, and the block ends
          5 px before the panel edge -- otherwise the close cross falls
          outside the panel clip and is invisible. */
-      bx = p->x + p->w - 46;
+      bx = p->x + p->w - 52;
       fill_rect (s, bx, btn_y + 4, 9, 1, C_TITLE_FG);             /* - */
       fill_rect (s, bx + 16, btn_y + 1, 9, 1, C_TITLE_FG);        /* square */
       fill_rect (s, bx + 16, btn_y + 9, 9, 1, C_TITLE_FG);
       fill_rect (s, bx + 16, btn_y + 1, 1, 9, C_TITLE_FG);
       fill_rect (s, bx + 24, btn_y + 1, 1, 9, C_TITLE_FG);
-      /* 2px strokes for the cross: a 1px diagonal on a dark bar reads as a
-         fuzzy smear rather than an X */
-      XSetForeground (s->dpy, s->gc, s->pal[C_TITLE_FG].pixel);
-      XSetLineAttributes (s->dpy, s->gc, 2, LineSolid, CapRound, JoinRound);
-      XDrawLine (s->dpy, s->window, s->gc,
-                 bx + 33, btn_y + 2, bx + 41, btn_y + 9);
-      XDrawLine (s->dpy, s->window, s->gc,
-                 bx + 41, btn_y + 2, bx + 33, btn_y + 9);
-      XSetLineAttributes (s->dpy, s->gc, 0, LineSolid, CapButt, JoinMiter);
+
+      /* close button: white cross on a filled blue disc, as in Adwaita */
+      {
+        int d  = s->char_h > 13 ? s->char_h + 3 : 15;
+        int cx = bx + 30;
+        int cy = p->y + (bar_h - d) / 2;
+        int m  = d / 4;
+
+        XSetForeground (s->dpy, s->gc, s->close_bg.pixel);
+        XFillArc (s->dpy, s->window, s->gc, cx, cy, d, d, 0, 360 * 64);
+
+        XSetForeground (s->dpy, s->gc, s->close_fg.pixel);
+        XSetLineAttributes (s->dpy, s->gc, 2, LineSolid, CapRound, JoinRound);
+        XDrawLine (s->dpy, s->window, s->gc,
+                   cx + m, cy + m, cx + d - m, cy + d - m);
+        XDrawLine (s->dpy, s->window, s->gc,
+                   cx + d - m, cy + m, cx + m, cy + d - m);
+        XSetLineAttributes (s->dpy, s->gc, 0, LineSolid, CapButt, JoinMiter);
+      }
     }
   else
     fill_rect (s, p->x, p->y, p->w, 1, C_DIM);
