@@ -113,6 +113,26 @@ Puis :
 Le script accepte un chemin de sortie en second argument, ramène l'image à
 2560 px de large et se rabat sur `convert` ou PIL si ffmpeg manque.
 
+## Binaire précompilé
+
+Une archive prête à l'emploi est attachée à chaque release :
+
+    https://github.com/marcpm2510/xscreensaver-hacks/releases/latest
+
+    gh release download -R marcp2510/xscreensaver-hacks -p "*.tar.gz"
+    tar xzf hackterm-1.0.0-linux-x86_64.tar.gz
+    sudo install -m 755 hackterm /usr/libexec/xscreensaver/hackterm
+    sudo install -m 644 hackterm.xml /usr/share/xscreensaver/config/hackterm.xml
+    xscreensaver-command -restart
+
+Puis ajouter `hackterm --root` dans la section `programs:` de
+`~/.xscreensaver` — le démon ne régénère pas ce fichier tout seul.
+
+Compilé sur Linux Mint 22 / Ubuntu 24.04, x86_64, glibc ≥ 2.38 ; liens
+dynamiques vers libX11, libXt, libXft, libfontconfig, libpng16. Sur une
+distribution plus ancienne, recompiler depuis les sources (section
+suivante).
+
 ## Compiler
 
 Depuis un arbre XScreenSaver configuré (`./configure` déjà passé) :
