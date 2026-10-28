@@ -8,12 +8,16 @@ aucun réseau n'est touché.
 Écrit pour XScreenSaver 6.x (X11 / Xft), licence MIT comme le reste de
 l'arbre.
 
+🇬🇧 English version: [README.en.md](README.en.md)
+
 ## Contenu
 
     hacks/hackterm.c             le hack (C, ~1630 lignes)
     hacks/config/hackterm.xml    panneau de réglages pour xscreensaver-settings
     scripts/build-hack.sh        compilation à la main (objets communs inclus)
     scripts/bg-convert.sh        convertit un fond d'écran en PNG
+    scripts/release.sh           tag + archive + release GitHub
+    README.en.md                 version anglaise de ce document
 
 ## Ce que ça fait
 
