@@ -1080,18 +1080,21 @@ static void draw_panel (ht_state *s, hpanel *p, double t)
                  p->y + (bar_h - s->char_h) / 2 + s->font->ascent,
                  p->title, C_TITLE_FG, p->cols);
 
-      /* window buttons, right aligned: minimize, maximize, close */
-      bx = p->x + p->w - 34;
+      /* window buttons, right aligned: minimize, maximize, close.
+         The three glyphs are 9 px wide with 7 px gaps, and the block ends
+         5 px before the panel edge -- otherwise the close cross falls
+         outside the panel clip and is invisible. */
+      bx = p->x + p->w - 46;
       fill_rect (s, bx, btn_y + 4, 9, 1, C_TITLE_FG);             /* - */
-      fill_rect (s, bx + 15, btn_y + 1, 9, 1, C_TITLE_FG);        /* square */
-      fill_rect (s, bx + 15, btn_y + 8, 9, 1, C_TITLE_FG);
-      fill_rect (s, bx + 15, btn_y + 1, 1, 8, C_TITLE_FG);
-      fill_rect (s, bx + 23, btn_y + 1, 1, 8, C_TITLE_FG);
+      fill_rect (s, bx + 16, btn_y + 1, 9, 1, C_TITLE_FG);        /* square */
+      fill_rect (s, bx + 16, btn_y + 8, 9, 1, C_TITLE_FG);
+      fill_rect (s, bx + 16, btn_y + 1, 1, 8, C_TITLE_FG);
+      fill_rect (s, bx + 24, btn_y + 1, 1, 8, C_TITLE_FG);
       XSetForeground (s->dpy, s->gc, s->pal[C_TITLE_FG].pixel);
       XDrawLine (s->dpy, s->window, s->gc,
-                 bx + 30, btn_y + 1, bx + 38, btn_y + 9);         /* x */
+                 bx + 33, btn_y + 1, bx + 41, btn_y + 9);         /* x */
       XDrawLine (s->dpy, s->window, s->gc,
-                 bx + 38, btn_y + 1, bx + 30, btn_y + 9);
+                 bx + 41, btn_y + 1, bx + 33, btn_y + 9);
     }
   else
     fill_rect (s, p->x, p->y, p->w, 1, C_DIM);
