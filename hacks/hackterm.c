@@ -1102,13 +1102,13 @@ static void draw_panel (ht_state *s, hpanel *p, double t)
         int d  = s->char_h > 13 ? s->char_h + 3 : 15;
         int cx = bx + 30;
         int cy = p->y + (bar_h - d) / 2;
-        int m  = d / 4;
+        int m  = d / 3;
 
         XSetForeground (s->dpy, s->gc, s->close_bg.pixel);
         XFillArc (s->dpy, s->window, s->gc, cx, cy, d, d, 0, 360 * 64);
 
         XSetForeground (s->dpy, s->gc, s->close_fg.pixel);
-        XSetLineAttributes (s->dpy, s->gc, 2, LineSolid, CapRound, JoinRound);
+        XSetLineAttributes (s->dpy, s->gc, 1, LineSolid, CapButt, JoinMiter);
         XDrawLine (s->dpy, s->window, s->gc,
                    cx + m, cy + m, cx + d - m, cy + d - m);
         XDrawLine (s->dpy, s->window, s->gc,
