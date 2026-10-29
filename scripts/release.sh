@@ -43,13 +43,6 @@ tar czf "$TAR" -C dist hackterm hackterm.xml bg-convert.sh
 echo "binaire : $(stat -c%s dist/hackterm) octets (strippé)"
 echo "archive : $TAR ($(stat -c%s "$TAR") octets)"
 
-if [ "$DRY" = 1 ]; then
-  echo
-  echo "[dry-run] git tag -a v$V -m \"Hackterm $V\" && git push origin v$V"
-  echo "[dry-run] gh release create v$V $TAR --title \"Hackterm $V\" --generate-notes"
-  exit 0
-fi
-
 # notes de version : les commits depuis le tag precedent
 PREV=$(git describe --tags --abbrev=0 2>/dev/null || true)
 if [ -n "$PREV" ]; then
@@ -62,6 +55,16 @@ NOTES="Changements depuis ${PREV:-le debut} :
 $NOTES
 
 Archive : hackterm-$V-linux-x86_64.tar.gz (binaire + XML + bg-convert.sh)"
+
+if [ "$DRY" = 1 ]; then
+  echo
+  echo "--- notes de version ---"
+  echo "$NOTES"
+  echo "------------------------"
+  echo "[dry-run] git tag -a v$V -m \"Hackterm $V\" && git push origin v$V"
+  echo "[dry-run] gh release create v$V $TAR --title \"Hackterm $V\" --notes \"...\""
+  exit 0
+fi
 
 git tag -a "v$V" -m "Hackterm $V"
 git push origin "v$V"
