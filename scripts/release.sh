@@ -50,9 +50,22 @@ if [ "$DRY" = 1 ]; then
   exit 0
 fi
 
+# notes de version : les commits depuis le tag precedent
+PREV=$(git describe --tags --abbrev=0 2>/dev/null || true)
+if [ -n "$PREV" ]; then
+  NOTES=$(git log --oneline "$PREV..HEAD" | sed 's/^/  - /')
+else
+  NOTES=$(git log --oneline -10 | sed 's/^/  - /')
+fi
+NOTES="Changements depuis ${PREV:-le debut} :
+
+$NOTES
+
+Archive : hackterm-$V-linux-x86_64.tar.gz (binaire + XML + bg-convert.sh)"
+
 git tag -a "v$V" -m "Hackterm $V"
 git push origin "v$V"
-gh release create "v$V" "$TAR" --title "Hackterm $V" --generate-notes
+gh release create "v$V" "$TAR" --title "Hackterm $V" --notes "$NOTES"
 
 echo
 echo "publié : https://github.com/marcpm2510/xscreensaver-hacks/releases/tag/v$V"
