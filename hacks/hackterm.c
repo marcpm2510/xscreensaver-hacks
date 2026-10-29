@@ -130,9 +130,14 @@ static const char *rand_user (void)
 
 static void add_line (hpanel *p, const char *text, int color)
 {
-  if (p->rows <= 0) return;
+  /* keep the last row free for the line being typed, otherwise the prompt
+     has nowhere to go once the scrollback is full and the command appears
+     out of nowhere when it is committed */
+  int cap = p->rows - 1;
 
-  if (p->nlines >= p->rows)
+  if (cap < 1) return;
+
+  if (p->nlines >= cap)
     {
       memmove (&p->lines[0], &p->lines[1],
                sizeof (hline) * (p->nlines - 1));
